@@ -12,6 +12,7 @@ class AC4:
     tmpList = []
     offset = 1003
     Q = Queue()
+    visited = {}
 
     def __init__(self, csp):
         self.csp = csp
@@ -26,8 +27,10 @@ class AC4:
         for i in range(1, self.csp.N+1):
             self.support[str(i)] = {}
             self.counter[str(i)] = {}
+            self.visited[str(i)] = {}
             for j in self.csp.dm_set[str(i)]:
                 self.support[str(i)][str(j)] = []
+                self.visited[str(i)][str(j)] = 0
                 self.counter[str(i)][str(j)] = {}
                 for k in range(1, self.csp.N+1):
                     self.counter[str(i)][str(j)][str(k)] = 0
@@ -36,30 +39,25 @@ class AC4:
         for i in range(1, self.csp.N+1):
             for j in range(0, len(self.csp.dm_set[str(i)])):
                 if self.csp.dm_set[str(i)][j] > 103:
-                    # print('erererereeeeeeeeeeeeeeee ', self.csp.dm_set[str(i)][j])
                     self.csp.dm_set[str(i)][j] -= self.offset
-                    # print('erererereeeeeeeeeeeeeeee ', self.csp.dm_set[str(i)][j])
 
     def initialize(self):
         self.preINIT()
         for node in range(1, self.csp.N+1):
-            tmpAdj = self.csp.adj[str(node)]
+            tmpAdj = copy.deepcopy(self.csp.adj[str(node)])
             uNode = copy.deepcopy(node)
             tmpAdj = tmpAdj.items()
-
             for itm in tmpAdj:
                 vNode = int(itm[0])
-                # print(uNode, ' --> ', vNode)
                 edgeNum = int(itm[1])
                 is_reversed = False
                 if edgeNum >= len(self.csp.eList):
                     is_reversed = True
 
                 for uDV in self.csp.dm_set[str(uNode)]:
-                    # self.support[str(uNode)][str(uDV)] = []
                     for vDV in self.csp.dm_set[str(vNode)]:
                         curCon = copy.deepcopy(self.csp.cons_set[str(edgeNum)])
-                        # print('cons: ', curCon)
+                        yes = False
                         if is_reversed:
                             curCon[2] = uDV
                             if curCon[2] > 103:
@@ -74,11 +72,10 @@ class AC4:
                             curCon[2] = vDV
                             if curCon[2] > 103:
                                 curCon[2] -= self.offset
-
                         yes = self.csp.cons.evaluatingConstraints(curCon)
-                        # print('return: ', yes, ' ', curCon)
+                        # print('Evaluating ', curCon, ' result: ',yes, ' at:', uNode)
                         if yes:
-                            # print('Append: ', [vNode, vDV], '-->', [uNode, uDV])
+                            # print('Push: ', [vNode, vDV], ' at ',[uNode, uDV])
                             self.support[str(uNode)][str(uDV)].append([vNode, vDV])
                             self.counter[str(uNode)][str(uDV)][str(vNode)] += 1
 
@@ -109,28 +106,39 @@ class AC4:
                             if j in self.csp.dm_set[str(i)]:
                                 tmpRVL.add(j)
                                 # self.mList.append([[i, j]])
-                                self.Q.put([int(i), int(j)])
+                                if self.visited[str(i)][str(j)] == 0:
+                                    # print('Queue pushing: ', [i, j])
+                                    self.visited[str(i)][str(j)] = 1
+                                    self.Q.put([int(i), int(j)])
             # print(tmpRVL)
-            # for tmprvl in tmpRVL:
-            #     self.csp.dm_set[str(i)].remove(tmprvl)
+            for tmprvl in tmpRVL:
+                self.csp.dm_set[str(i)].remove(tmprvl)
+            if len(self.csp.dm_set[str(i)]) == 0:
+                self.csp.mm.pEnd()
+                return False
 
-        # print(self.tmpList ,' lllll')
-        # for tmp in self.tmpList:
         while not self.Q.empty():
-            tmp = self.Q.get()
 
+            tmp = self.Q.get()
             self.mList.append(tmp)
             for xa in self.support[str(tmp[0])][str(tmp[1])]:
-                if xa[1] in self.csp.dm_set[str(xa[0])] and self.csp.mat[xa[0]][tmp[0]] == 1:
+                if xa[1] in self.csp.dm_set[str(xa[0])] and self.csp.mat[xa[0]][tmp[0]] == 1 and self.csp.mat[tmp[0]][xa[0]] == 1:
                     self.counter[str(xa[0])][str(xa[1])][str(tmp[0])] -= 1
                     if self.counter[str(xa[0])][str(xa[1])][str(tmp[0])] == 0:
-                        if xa[1] in self.csp.dm_set[str(xa[0])]:
-                            # self.tmpList.append([xa[0], xa[1]])
+                        if self.visited[str(xa[0])][str(xa[1])] == 0:
+                            self.visited[str(xa[0])][str(xa[1])] = 1
+                            self.csp.dm_set[str(str(xa[0]))].remove(xa[1])
+                            if len(self.csp.dm_set[str(xa[0])]) ==0:
+                                self.csp.mm.pEnd()
+                                return False
                             self.Q.put([xa[0], xa[1]])
 
         for tmprvl in self.mList:
             if tmprvl[1] in self.csp.dm_set[str(tmprvl[0])]:
                 self.csp.dm_set[str(tmprvl[0])].remove(tmprvl[1])
+            if len(self.csp.dm_set[str(tmprvl[0])]) == 0:
+                self.csp.mm.pEnd()
+                return False
 
         # self.getDomainBack()
         for i in range(1, self.csp.N+1):
